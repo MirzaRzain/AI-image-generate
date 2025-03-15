@@ -2,7 +2,6 @@ const express = require("express");
 const cors = require("cors");
 const axios = require("axios");
 const FormData = require("form-data");
-const fs = require("fs"); // Tambahkan modul fs
 require("dotenv").config();
 
 const app = express();
@@ -11,9 +10,16 @@ const PORT = process.env.PORT || 5001;
 app.use(cors());
 app.use(express.json());
 
+const fs = require("fs");
+
 app.post("/generate", async (req, res) => {
-    console.log("Request received");
+    console.log("Request received:", req.body);
+
     const { prompt } = req.body;
+
+    if (!prompt) {
+        return res.status(400).json({ error: "Prompt is required" });
+    }
 
     try {
         const formData = new FormData();
@@ -28,30 +34,42 @@ app.post("/generate", async (req, res) => {
                     Authorization: `Bearer ${process.env.STABILITY_API_KEY}`,
                     ...formData.getHeaders(),
                 },
-                responseType: "arraybuffer",
             }
         );
 
-        console.log("Response Headers:", response.headers);
-        console.log("Response Data Sample:", response.data.slice(0, 100).toString("hex"));
+        // Cek apakah response JSON atau langsung image buffer
+        const contentType = response.headers["content-type"];
+        if (contentType.includes("application/json")) {
+            const jsonResponse = response.data;
+            console.log("API Response JSON:", jsonResponse);
 
-        // Cek apakah API Stability AI mengembalikan data valid
-        console.log("Response Data Length:", response.data.length);
-        if (response.data.length < 1000) {
-            throw new Error("Invalid image data received from Stability AI");
+            if (!jsonResponse.image) {
+                throw new Error("Invalid response format: No image data found.");
+            }
+
+            // Decode Base64
+            const base64Data = jsonResponse.image.replace(/^data:image\/\w+;base64,/, "");
+            const imageBuffer = Buffer.from(base64Data, "base64");
+
+            // Simpan sebagai file JPG
+            const imagePath = "generated_image.jpg";
+            fs.writeFileSync(imagePath, imageBuffer);
+            console.log(`✅ Image saved as ${imagePath}`);
+
+            res.json({ message: "Image generated successfully", file: imagePath });
+            return;
         }
 
-        // Simpan gambar ke file untuk debugging
-        fs.writeFileSync("test_image.jpeg", response.data);
-        console.log("Image saved as test_image.jpeg");
+        // Jika API langsung mengembalikan binary image
+        console.log("Received raw image data");
+        const imagePath = "generated_image.jpeg";
+        fs.writeFileSync(imagePath, response.data);
+        console.log(`✅ Image saved as ${imagePath}`);
 
-        // Konversi ke Base64 agar frontend bisa menggunakannya
-        const base64Image = Buffer.from(response.data, "binary").toString("base64");
-
-        res.json({ image: `data:image/jpeg;base64,${base64Image}` });
+        res.json({ message: "Image generated successfully", file: imagePath });
     } catch (error) {
         console.error("Error generating image:", error.message);
-        res.status(500).json({ error: "Failed to generate image" });
+        res.status(500).json({ error: error.message || "Failed to generate image" });
     }
 });
 

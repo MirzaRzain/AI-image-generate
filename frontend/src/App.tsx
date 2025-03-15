@@ -3,18 +3,18 @@ import axios from "axios";
 
 function App() {
   const [prompt, setPrompt] = useState("");
-  const [image, setImage] = useState<string | null>(null);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const generateImage = async () => {
     setLoading(true);
-    setImage(null);
+    setImageUrl(null);
 
     try {
-      const response = await axios.post("http://localhost:5000/generate", { prompt });
+      const response = await axios.post("http://localhost:5001/generate", { prompt });
 
       if (response.data.image) {
-        setImage(response.data.image);
+        setImageUrl(response.data.image); // Simpan URL gambar dari backend
       } else {
         console.error("No image received");
       }
@@ -43,10 +43,14 @@ function App() {
         {loading ? "Generating..." : "Generate Image"}
       </button>
 
-      {image && (
+      {/* Tombol download */}
+      {imageUrl && (
         <div className="mt-4">
-          <img src={image} alt="Generated" className="rounded shadow-lg mb-2" />
-          <a href={image} download="generated_image.jpeg" className="block px-4 py-2 bg-green-600 rounded text-white text-center">
+          <a
+            href={imageUrl}
+            download="generated_image.jpg"
+            className="block px-4 py-2 bg-green-600 rounded text-white text-center"
+          >
             Download Image
           </a>
         </div>
